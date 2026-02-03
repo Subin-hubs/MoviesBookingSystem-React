@@ -1,12 +1,16 @@
-//CHANGES
-// Import the functions you need from the SDKs you need
+// Import Firebase core
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Firebase Analytics (optional)
+import { getAnalytics } from "firebase/analytics";
+
+// Firebase Auth
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+
+// Firestore Database
+import { getFirestore } from "firebase/firestore";
+
+// Your Firebase Config
 const firebaseConfig = {
     apiKey: "AIzaSyAFazzOomEIAhHSAR2JUQ-SWSRjdH9LZs4",
     authDomain: "moviesbooking-70e3e.firebaseapp.com",
@@ -19,4 +23,16 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+
+// Initialize analytics only if browser supports it
+let analytics = null;
+if (typeof window !== "undefined") {
+    analytics = getAnalytics(app);
+}
+
+// Initialize services
+export const auth = getAuth(app);
+export const provider = new GoogleAuthProvider();
+export const db = getFirestore(app);
+
+export default app;

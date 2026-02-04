@@ -1,18 +1,24 @@
 // Import Firebase core
 import { initializeApp } from "firebase/app";
+
+// Firebase Analytics (optional)
 import { getAnalytics } from "firebase/analytics";
+
+// Firebase Auth
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+
+// Firestore Database
 import { getFirestore } from "firebase/firestore";
 
-// Firebase Config using .env
+// Your Firebase Config
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    apiKey: "AIzaSyAFazzOomEIAhHSAR2JUQ-SWSRjdH9LZs4",
+    authDomain: "moviesbooking-70e3e.firebaseapp.com",
+    projectId: "moviesbooking-70e3e",
+    storageBucket: "moviesbooking-70e3e.firebasestorage.app",
+    messagingSenderId: "811153916098",
+    appId: "1:811153916098:web:595f48f562592983757b5b",
+    measurementId: "G-H23WS4XF67"
 };
 
 // Initialize Firebase

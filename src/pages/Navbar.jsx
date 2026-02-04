@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Navbar() {
-    const [isLoggedIn, setIsLoggedIn] = useState(true); // Mocking logged in state
+    const [isLoggedIn, setIsLoggedIn] = useState(false); // Mocking logged in state
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const drawerRef = useRef(null);
     const navigate = useNavigate();

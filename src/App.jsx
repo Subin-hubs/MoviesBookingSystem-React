@@ -12,7 +12,15 @@ import MyBooking from "./pages/MyBooking";
 import Login from "./auth/LoginPage";
 import Register from "./auth/SignupPage";
 
+// Seed Function
+import { seedCompleteSystem } from "./seed/SeedData";
+
 export default function App() {
+  // Seed Firestore only once
+  React.useEffect(() => {
+    seedCompleteSystem(); // <-- updated here
+  }, []);
+
   return (
     <>
       <Navbar />
@@ -20,7 +28,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/movies" element={<Movies />} />
-          <Route path="/movies/:id" element={<MovieDetail />} />
+          <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/booking" element={<MyBooking />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -29,4 +37,3 @@ export default function App() {
     </>
   );
 }
-    

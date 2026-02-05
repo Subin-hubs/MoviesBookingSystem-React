@@ -18,7 +18,7 @@ import { seedCompleteSystem } from "./seed/SeedData";
 export default function App() {
   // Seed Firestore only once
   React.useEffect(() => {
-    seedCompleteSystem(); // <-- updated here
+    //seedCompleteSystem(); // <-- updated here
   }, []);
 
   return (

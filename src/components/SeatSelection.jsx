@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 import CryptoJS from "crypto-js";
-import { FaMoneyBillWave, FaCreditCard, FaWallet, FaTimes } from 'react-icons/fa';
+import { FaTimes, FaCreditCard } from 'react-icons/fa';
 
 const SeatSelection = () => {
     const { showId } = useParams();
     const navigate = useNavigate();
-
     const [show, setShow] = useState(null);
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [bookedSeats, setBookedSeats] = useState([]);
@@ -22,43 +21,34 @@ const SeatSelection = () => {
             try {
                 const snap = await getDoc(doc(db, "shows", showId));
                 if (snap.exists()) {
-                    const data = snap.data();
-                    setShow(data);
-                    setBookedSeats(data.bookedSeats || []);
+                    setShow(snap.data());
+                    setBookedSeats(snap.data().bookedSeats || []);
                 }
             } catch (error) {
-                console.error("Error fetching show data:", error);
+                console.error("Error fetching show:", error);
             }
         };
         fetchShow();
     }, [showId]);
 
-    const toggleSeat = (seat) => {
-        if (bookedSeats.includes(seat)) return;
-        setSelectedSeats(prev =>
-            prev.includes(seat)
-                ? prev.filter(s => s !== seat)
-                : [...prev, seat]
-        );
-    };
-
-    // ------------------------------
-    // 1. ESEWA PAYMENT LOGIC
-    // ------------------------------
     const handleEsewaPayment = () => {
-        const amt = (selectedSeats.length * 500).toString();
-        const txId = `TXN-${Date.now()}`;
+        if (selectedSeats.length === 0) return;
+
+        // 1. Setup Variables - Force clean strings (Rs. 5 per seat)
+        const amt = (selectedSeats.length * 5).toString();
+        const uniqueSuffix = Math.floor(Math.random() * 1000);
+        const txId = `TXN-${Date.now()}-${uniqueSuffix}`;
         const pCode = "EPAYTEST";
         const secret = "8gBm/:&EnhH.1/q";
 
-        // 1. Signature String (CRITICAL: No spaces after commas)
+        // 2. The Signature String - NO SPACES, EXACT ORDER
         const sigString = `total_amount=${amt},transaction_uuid=${txId},product_code=${pCode}`;
+
+        // 3. Generate HMAC-SHA256
         const hash = CryptoJS.HmacSHA256(sigString, secret);
         const signature = CryptoJS.enc.Base64.stringify(hash);
 
-        // 2. Dynamic Redirect URL (Works on Local & Vercel)
-        const baseUrl = window.location.origin;
-
+        // 4. Define the Exact Payload for eSewa v2
         const formData = {
             "amount": amt,
             "tax_amount": "0",
@@ -67,172 +57,126 @@ const SeatSelection = () => {
             "product_code": pCode,
             "product_service_charge": "0",
             "product_delivery_charge": "0",
-            "success_url": `${baseUrl}/payment-success`, // Dynamic path
-            "failure_url": `${baseUrl}/payment-fail`,
+            "success_url": `${window.location.origin}/payment-success`,
+            "failure_url": `${window.location.origin}/payment-fail`,
             "signed_field_names": "total_amount,transaction_uuid,product_code",
             "signature": signature
         };
 
-        // 3. Store booking data in LocalStorage 
-        // We need this because eSewa doesn't return seat numbers in the URL!
+        // 5. CRITICAL: Save data to LocalStorage before redirecting
+        // This allows PaymentSuccess.jsx to know what to save in Firebase
         localStorage.setItem("pendingBooking", JSON.stringify({
             movieTitle: show.movieTitle,
             amount: amt,
             selectedSeats: selectedSeats,
             showId: showId,
-            userId: auth.currentUser?.uid // Ensure user is logged in
+            theaterName: show.theaterName,
+            time: show.time,
+            userId: auth.currentUser?.uid || "guest"
         }));
 
-        // 4. Submit Form
+        // 6. Submit via Hidden Form (Standard for eSewa v2)
         const form = document.createElement("form");
         form.method = "POST";
         form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
 
-        Object.keys(formData).forEach(key => {
+        Object.entries(formData).forEach(([key, value]) => {
             const input = document.createElement("input");
             input.type = "hidden";
             input.name = key;
-            input.value = formData[key];
+            input.value = value;
             form.appendChild(input);
         });
 
         document.body.appendChild(form);
+        console.log("SIGNATURE STRING:", sigString);
+        console.log("FORM DATA:", formData);
         form.submit();
     };
 
-    // ------------------------------
-    // 2. OTHER PAYMENT HANDLERS
-    // ------------------------------
-    const handleOtherPayment = (method) => {
-        // Placeholder for Khalti, Card, or Cash logic
-        alert(`${method} payment integration coming soon! For now, please use eSewa.`);
-    };
-
-    if (!show) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+    if (!show) return (
+        <div className="min-h-screen bg-black flex items-center justify-center text-white font-bold italic uppercase tracking-widest">
+            Loading Cinema...
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-[#050505] text-white p-10 flex flex-col items-center pb-40">
-            <h1 className="text-3xl font-black uppercase italic mb-2">{show.movieTitle}</h1>
-            <p className="text-red-600 font-bold mb-10">{show.theaterName} — {show.time}</p>
+            <h1 className="text-4xl font-black mb-2 italic uppercase tracking-tighter">{show.movieTitle}</h1>
+            <p className="text-red-600 font-bold mb-12 uppercase text-xs tracking-[0.3em]">{show.theaterName} • {show.time}</p>
 
-            {/* Screen Indicator */}
-            <div className="w-full max-w-2xl mb-16">
-                <div className="h-2 bg-white/20 rounded-full shadow-[0_-10px_40px_rgba(255,255,255,0.3)]" />
-                <p className="text-center text-[10px] tracking-[0.5em] text-gray-600 mt-4 uppercase">Screen This Way</p>
+            <div className="w-full max-w-2xl mb-20">
+                <div className="h-1 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full" />
+                <p className="text-center text-[10px] text-gray-600 mt-4 uppercase tracking-[1em]">Screen</p>
             </div>
 
-            {/* Seat Grid */}
-            <div className="grid gap-4 mb-20">
+            <div className="grid gap-4">
                 {rows.map(row => (
                     <div key={row} className="flex gap-4 items-center">
-                        <span className="w-6 text-gray-600 font-bold text-xs">{row}</span>
-                        <div className="flex gap-2">
-                            {cols.map(col => {
-                                const seatId = `${row}${col}`;
-                                const isBooked = bookedSeats.includes(seatId);
-                                const isSelected = selectedSeats.includes(seatId);
-
-                                return (
-                                    <button
-                                        key={seatId}
-                                        disabled={isBooked}
-                                        onClick={() => toggleSeat(seatId)}
-                                        className={`w-8 h-8 rounded-t-lg transition-all duration-300 text-[10px] font-bold
-                                            ${isBooked ? 'bg-gray-800 cursor-not-allowed' :
-                                                isSelected ? 'bg-red-600 scale-110 shadow-[0_0_20px_rgba(220,38,38,0.5)]' :
-                                                    'bg-white/10 hover:bg-white/30'}`}
-                                    >
-                                        {col}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <span className="w-6 text-gray-700 font-black text-xs">{row}</span>
+                        {cols.map(col => {
+                            const id = `${row}${col}`;
+                            const isBooked = bookedSeats.includes(id);
+                            const isSelected = selectedSeats.includes(id);
+                            return (
+                                <button
+                                    key={id}
+                                    disabled={isBooked}
+                                    onClick={() => setSelectedSeats(prev => isSelected ? prev.filter(s => s !== id) : [...prev, id])}
+                                    className={`w-8 h-8 rounded-t-lg transition-all duration-200 text-[10px] font-bold
+                                        ${isBooked ? 'bg-zinc-800 cursor-not-allowed opacity-30' :
+                                            isSelected ? 'bg-red-600 scale-110 shadow-[0_0_15px_rgba(220,38,38,0.4)]' :
+                                                'bg-white/5 hover:bg-white/20'}`}
+                                >
+                                    {col}
+                                </button>
+                            );
+                        })}
                     </div>
                 ))}
             </div>
 
-            {/* Legend */}
-            <div className="flex gap-8 mb-10 text-xs font-bold uppercase tracking-widest text-gray-500">
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-white/10 rounded" /> Available</div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-600 rounded" /> Selected</div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 bg-gray-800 rounded" /> Sold</div>
+            <div className="flex gap-8 mt-16 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-white/10 rounded" /> Available</div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-600 rounded" /> Selected</div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-zinc-800 rounded" /> Sold</div>
             </div>
 
-            {/* PAYMENT METHOD MODAL */}
             {showPaymentModal && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] flex items-center justify-center p-6 animate-in fade-in duration-300">
-                    <div className="bg-zinc-900 border border-white/10 p-8 rounded-[40px] max-w-md w-full relative shadow-2xl">
-                        <button
-                            onClick={() => setShowPaymentModal(false)}
-                            className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
-                        >
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-6">
+                    <div className="bg-zinc-900 border border-white/5 p-8 rounded-[40px] max-w-md w-full relative">
+                        <button onClick={() => setShowPaymentModal(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white">
                             <FaTimes size={20} />
                         </button>
-
-                        <h2 className="text-3xl font-black uppercase italic mb-2">Checkout</h2>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-8">
-                            Total: <span className="text-red-500">Rs. {selectedSeats.length * 500}</span>
+                        <h2 className="text-3xl font-black mb-1 italic uppercase tracking-tighter">Secure Pay</h2>
+                        <p className="text-gray-500 text-xs font-bold mb-8 uppercase tracking-widest">
+                            Seats: {selectedSeats.join(', ')}
                         </p>
 
-                        <div className="grid gap-3">
-                            {/* eSewa */}
-                            <button onClick={handleEsewaPayment} className="flex items-center justify-between bg-[#60bb46] p-5 rounded-2xl hover:brightness-110 transition-all group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#60bb46] font-black text-xs">eS</div>
-                                    <span className="font-black uppercase text-xs tracking-wider">eSewa Wallet</span>
-                                </div>
-                                <div className="text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity uppercase">Pay Now</div>
+                        <div className="space-y-3">
+                            <button onClick={handleEsewaPayment} className="w-full bg-[#60bb46] py-5 rounded-2xl font-black text-white uppercase text-xs tracking-widest hover:brightness-110 flex items-center justify-center gap-3">
+                                <span className="bg-white text-[#60bb46] px-2 py-0.5 rounded text-[10px]">eS</span>
+                                Pay Rs. {selectedSeats.length * 5} via eSewa
                             </button>
-
-                            {/* Khalti */}
-                            <button onClick={() => handleOtherPayment('Khalti')} className="flex items-center justify-between bg-[#5d2e8e] p-5 rounded-2xl hover:brightness-110 transition-all group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#5d2e8e] font-black text-xs uppercase">K</div>
-                                    <span className="font-black uppercase text-xs tracking-wider">Khalti</span>
-                                </div>
-                            </button>
-
-                            {/* Card */}
-                            <button onClick={() => handleOtherPayment('Card')} className="flex items-center justify-between bg-zinc-800 border border-white/5 p-5 rounded-2xl hover:bg-zinc-700 transition-all">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center text-white">
-                                        <FaCreditCard size={14} />
-                                    </div>
-                                    <span className="font-black uppercase text-xs tracking-wider">Credit / Debit Card</span>
-                                </div>
-                            </button>
-
-                            {/* Cash */}
-                            <button onClick={() => handleOtherPayment('Cash')} className="flex items-center justify-between bg-zinc-800 border border-white/5 p-5 rounded-2xl hover:bg-zinc-700 transition-all">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center text-green-500">
-                                        <FaMoneyBillWave size={14} />
-                                    </div>
-                                    <span className="font-black uppercase text-xs tracking-wider">Pay at Counter (Cash)</span>
-                                </div>
+                            <button disabled className="w-full bg-white/5 py-5 rounded-2xl font-black text-gray-600 uppercase text-xs tracking-widest flex items-center justify-center gap-3 cursor-not-allowed">
+                                <FaCreditCard /> Debit / Credit Card
                             </button>
                         </div>
-
-                        <p className="mt-8 text-center text-[9px] text-gray-600 uppercase font-bold tracking-widest">
-                            Secure Encrypted Payment
-                        </p>
                     </div>
                 </div>
             )}
 
-            {/* Bottom Summary Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-gray-900/90 border-t border-white/10 p-6 flex justify-around items-center backdrop-blur-xl z-[100]">
-                <div className="text-center">
-                    <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Selected Seats</p>
-                    <p className="text-xl font-black text-red-500">{selectedSeats.length > 0 ? selectedSeats.join(', ') : '--'}</p>
+            <div className="fixed bottom-0 left-0 right-0 bg-zinc-900/50 backdrop-blur-2xl border-t border-white/5 p-8 flex justify-between items-center px-12 z-[100]">
+                <div>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Amount</p>
+                    <p className="text-2xl font-black text-red-600">Rs. {selectedSeats.length * 5}</p>
                 </div>
-
                 <button
                     onClick={() => setShowPaymentModal(true)}
                     disabled={selectedSeats.length === 0}
-                    className="bg-red-600 px-12 py-4 rounded-full font-black uppercase text-xs tracking-widest transition-all hover:bg-white hover:text-black disabled:opacity-50 relative z-[110] cursor-pointer"
+                    className="bg-white text-black px-12 py-4 rounded-full font-black uppercase text-xs tracking-[0.2em] transition-all hover:bg-red-600 hover:text-white disabled:opacity-20"
                 >
-                    Confirm Booking (Rs.{selectedSeats.length * 500})
+                    Confirm Order
                 </button>
             </div>
         </div>

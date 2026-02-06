@@ -46,39 +46,44 @@ const SeatSelection = () => {
     // 1. ESEWA PAYMENT LOGIC
     // ------------------------------
     const handleEsewaPayment = () => {
-        const totalAmount = (selectedSeats.length * 500).toString();
-        const transactionUuid = `TXN-${Date.now()}`;
-        const productCode = "EPAYTEST";
+        const amt = (selectedSeats.length * 500).toString();
+        const txId = `TXN-${Date.now()}`;
+        const pCode = "EPAYTEST";
         const secret = "8gBm/:&EnhH.1/q";
 
-        const signatureString = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-        const hash = CryptoJS.HmacSHA256(signatureString, secret);
+        // 1. Signature String (CRITICAL: No spaces after commas)
+        const sigString = `total_amount=${amt},transaction_uuid=${txId},product_code=${pCode}`;
+        const hash = CryptoJS.HmacSHA256(sigString, secret);
         const signature = CryptoJS.enc.Base64.stringify(hash);
 
-        // Save pending data for success page
-        const pendingData = {
-            movieTitle: show.movieTitle,
-            amount: totalAmount,
-            selectedSeats: selectedSeats,
-            showId: showId,
-            paymentMethod: "eSewa"
-        };
-        localStorage.setItem("pendingBooking", JSON.stringify(pendingData));
+        // 2. Dynamic Redirect URL (Works on Local & Vercel)
+        const baseUrl = window.location.origin;
 
         const formData = {
-            "amount": totalAmount,
+            "amount": amt,
             "tax_amount": "0",
-            "total_amount": totalAmount,
-            "transaction_uuid": transactionUuid,
-            "product_code": productCode,
+            "total_amount": amt,
+            "transaction_uuid": txId,
+            "product_code": pCode,
             "product_service_charge": "0",
             "product_delivery_charge": "0",
-            "success_url": `${window.location.origin}/payment-success`,
-            "failure_url": `${window.location.origin}/payment`,
+            "success_url": `${baseUrl}/payment-success`, // Dynamic path
+            "failure_url": `${baseUrl}/payment-fail`,
             "signed_field_names": "total_amount,transaction_uuid,product_code",
             "signature": signature
         };
 
+        // 3. Store booking data in LocalStorage 
+        // We need this because eSewa doesn't return seat numbers in the URL!
+        localStorage.setItem("pendingBooking", JSON.stringify({
+            movieTitle: show.movieTitle,
+            amount: amt,
+            selectedSeats: selectedSeats,
+            showId: showId,
+            userId: auth.currentUser?.uid // Ensure user is logged in
+        }));
+
+        // 4. Submit Form
         const form = document.createElement("form");
         form.method = "POST";
         form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";

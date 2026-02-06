@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase'; // Added auth import
+import { onAuthStateChanged } from 'firebase/auth';
 
 const MovieDetail = () => {
   const { id } = useParams();
@@ -9,9 +10,18 @@ const MovieDetail = () => {
   const [movie, setMovie] = useState(null);
   const [theaters, setTheaters] = useState([]);
   const [selectedTheater, setSelectedTheater] = useState("");
-  const [showtimes, setShowtimes] = useState([]); // State for showtimes
+  const [showtimes, setShowtimes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [videoSrc, setVideoSrc] = useState("");
+  const [user, setUser] = useState(null);
+
+  // Track Auth State
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // 1. Fetch Movie and Theaters
   useEffect(() => {
@@ -60,6 +70,18 @@ const MovieDetail = () => {
     fetchTimes();
   }, [selectedTheater, id]);
 
+  // LOGIN PROTECTED BOOKING HANDLER
+  const handleBooking = (showId) => {
+    if (!user) {
+      // If no user is logged in, alert them and send to login page
+      alert("Please login to book your seats!");
+      navigate("/login");
+    } else {
+      // If logged in, proceed to seat selection
+      navigate(`/seats/${showId}`);
+    }
+  };
+
   if (loading) return <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">Loading...</div>;
 
   return (
@@ -75,10 +97,10 @@ const MovieDetail = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-10 -mt-10">
-        {/* LEFT: Trailer */}
+        {/* LEFT: Trailer & About */}
         <div className="lg:col-span-2 space-y-8">
           <div className="aspect-video w-full overflow-hidden rounded-2xl shadow-2xl border border-white/10 bg-black">
-            <iframe width="100%" height="100%" src={videoSrc} frameBorder="0" allowFullScreen></iframe>
+            <iframe width="100%" height="100%" src={videoSrc} frameBorder="0" allowFullScreen title="Trailer"></iframe>
           </div>
           <div className="bg-gray-900/50 p-8 rounded-2xl border border-gray-800">
             <h2 className="text-xl font-bold mb-4 text-gray-400">About</h2>
@@ -106,7 +128,6 @@ const MovieDetail = () => {
               </select>
             </div>
 
-            {/* SHOWTIMES LIST (Appears only after theater is selected) */}
             {selectedTheater && (
               <div className="pt-4 border-t border-gray-800">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -118,7 +139,8 @@ const MovieDetail = () => {
                     showtimes.map((show) => (
                       <button
                         key={show.id}
-                        onClick={() => navigate(`/seats/${show.id}`)}
+                        // UPDATED: Now calls the protected handler
+                        onClick={() => handleBooking(show.id)}
                         className="bg-gray-800 hover:bg-red-600 border border-gray-700 p-3 rounded-lg text-center transition-all group"
                       >
                         <p className="text-xs text-gray-400 group-hover:text-white mb-1">{show.date}</p>
@@ -126,10 +148,17 @@ const MovieDetail = () => {
                       </button>
                     ))
                   ) : (
-                    <p className="col-span-2 text-sm text-gray-500 italic">Loading times...</p>
+                    <p className="col-span-2 text-sm text-gray-500 italic">No shows found.</p>
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Visual Hint for Non-Logged In Users */}
+            {!user && selectedTheater && (
+              <p className="text-center text-[10px] text-gray-500 uppercase tracking-widest font-bold animate-pulse">
+                Login Required to Book
+              </p>
             )}
           </div>
         </div>

@@ -34,37 +34,11 @@ const SeatSelection = () => {
     const handleEsewaPayment = () => {
         if (selectedSeats.length === 0) return;
 
-        // 1. Setup Variables - Force clean strings (Rs. 5 per seat)
+        // 1. Prepare the booking data exactly like the real logic would
         const amt = (selectedSeats.length * 5).toString();
-        const uniqueSuffix = Math.floor(Math.random() * 1000);
-        const txId = `TXN-${Date.now()}-${uniqueSuffix}`;
-        const pCode = "EPAYTEST";
-        const secret = "8gBm/:&EnhH.1/q";
+        const txId = `FAKE-TXN-${Date.now()}`;
 
-        // 2. The Signature String - NO SPACES, EXACT ORDER
-        const sigString = `total_amount=${amt},transaction_uuid=${txId},product_code=${pCode}`;
-
-        // 3. Generate HMAC-SHA256
-        const hash = CryptoJS.HmacSHA256(sigString, secret);
-        const signature = CryptoJS.enc.Base64.stringify(hash);
-
-        // 4. Define the Exact Payload for eSewa v2
-        const formData = {
-            "amount": amt,
-            "tax_amount": "0",
-            "total_amount": amt,
-            "transaction_uuid": txId,
-            "product_code": pCode,
-            "product_service_charge": "0",
-            "product_delivery_charge": "0",
-            "success_url": `${window.location.origin}/payment-success`,
-            "failure_url": `${window.location.origin}/payment-fail`,
-            "signed_field_names": "total_amount,transaction_uuid,product_code",
-            "signature": signature
-        };
-
-        // 5. CRITICAL: Save data to LocalStorage before redirecting
-        // This allows PaymentSuccess.jsx to know what to save in Firebase
+        // 2. Save to LocalStorage so the Success page can read it
         localStorage.setItem("pendingBooking", JSON.stringify({
             movieTitle: show.movieTitle,
             amount: amt,
@@ -75,23 +49,23 @@ const SeatSelection = () => {
             userId: auth.currentUser?.uid || "guest"
         }));
 
-        // 6. Submit via Hidden Form (Standard for eSewa v2)
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+        // 3. Create a fake "data" string that PaymentSuccess expects
+        // We encode a simple JSON object into Base64 to mimic eSewa
+        const fakeResponse = {
+            status: "COMPLETE",
+            transaction_code: "FAKE_CODE_123",
+            transaction_uuid: txId,
+            total_amount: amt
+        };
+        const encodedData = btoa(JSON.stringify(fakeResponse));
 
-        Object.entries(formData).forEach(([key, value]) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = key;
-            input.value = value;
-            form.appendChild(input);
-        });
+        // 4. Fake a "Loading" state then redirect
+        console.log("Simulating eSewa Payment...");
 
-        document.body.appendChild(form);
-        console.log("SIGNATURE STRING:", sigString);
-        console.log("FORM DATA:", formData);
-        form.submit();
+        // Redirect to your success page with the fake data parameter
+        setTimeout(() => {
+            navigate(`/payment-success?data=${encodedData}`);
+        }, 1500);
     };
 
     if (!show) return (
